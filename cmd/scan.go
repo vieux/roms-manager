@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -90,15 +91,17 @@ func scanZip(datGame *dat.Game, game *gamelist.Game, path string) bool {
 	return true
 }
 
-func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) error {
-	total := 0
+func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) (int, error) {
 	hidden := 0
 	for i, game := range gamelistFile.Games {
 		log.WithFields(log.Fields{"rom": game.RomName, "hidden": game.Hidden}).Debugf("scanning game")
+
+		if c.Bool("force-visible") {
+			gamelistFile.Games[i].Hidden = false
+		}
 		if game.Hidden {
 			continue
 		}
-		total++
 		datGame, ok := datFile.RomNames[game.RomName]
 		if !ok {
 			log.WithFields(log.Fields{"rom": game.RomName}).Warn("not present in .dat file")
@@ -112,41 +115,65 @@ func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) e
 				hidden++
 				continue
 			}
-
-			if c.Bool("clones-only") && datGame.CloneOf != "" && datGame.CloneOf != datGame.Name {
-				if _, ok := gamelistFile.RomNames[datGame.CloneOf]; ok && !gamelistFile.RomNames[datGame.CloneOf].Hidden {
-					log.WithFields(log.Fields{"rom": game.RomName}).Warnf("clone of %q", datGame.CloneOf)
-					gamelistFile.RomNames[datGame.CloneOf].Hidden = true
-					gamelistFile.RomNames[datGame.CloneOf].Favorite = false
-					hidden++
-					continue
-				}
-				/*
-					if _, ok := gamelistFile.RomNames[datGame.CloneOf]; ok {
-						for j, _ := range datFile.RomNames[datGame.CloneOf].Clones {
-							if _, ok2 := gamelistFile.RomNames[datFile.RomNames[datGame.CloneOf].Clones[j].Name]; ok2 {
-								if !gamelistFile.RomNames[datFile.RomNames[datGame.CloneOf].Clones[j].Name].Hidden {
-									log.WithFields(log.Fields{"rom": game.RomName}).Warnf("another clone of %q is already present", datGame.CloneOf)
-									gamelistFile.Games[i].Hidden = true
-									gamelistFile.Games[i].Favorite = false
-									hidden++
-									continue
-								}
-							}
-						}
-					}
-				*/
-			}
-
-			if c.Bool("force-visible") {
-				gamelistFile.Games[i].Hidden = false
-			}
 		}
 	}
 
-	log.WithFields(log.Fields{"path": gamelistFile.ShortPath}).Infof("%d games out of %d were marked as hidden", hidden, total)
+	return hidden, nil
+}
 
-	return nil
+func scanClones(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) (int, error) {
+	hidden := 0
+	for _, game := range gamelistFile.Games {
+		if game.Hidden {
+			continue
+		}
+		datGame, ok := datFile.RomNames[game.RomName]
+		if !ok {
+			continue
+		}
+		if datGame.CloneOf == "" {
+			continue
+		}
+		log.WithFields(log.Fields{"rom": game.RomName, "hidden": game.Hidden}).Debugf("scanning clone")
+
+		if parentDatGame, ok := datFile.RomNames[datGame.CloneOf]; ok {
+			visibleGamelistClones := []*gamelist.Game{}
+
+			visibleGamelistClones = append(visibleGamelistClones, gamelistFile.RomNames[datGame.CloneOf])
+			for _, datClone := range parentDatGame.Clones {
+				if gamelistClone, ok := gamelistFile.RomNames[datClone.Name]; ok && !gamelistClone.Hidden {
+					visibleGamelistClones = append(visibleGamelistClones, gamelistClone)
+				}
+			}
+
+			if len(visibleGamelistClones) > 1 {
+				sort.SliceStable(visibleGamelistClones, func(i, j int) bool {
+					return datFile.RomNames[visibleGamelistClones[i].RomName].Description > datFile.RomNames[visibleGamelistClones[j].RomName].Description
+				})
+
+				num := 0
+				if c.Bool("clones-selection") {
+					fmt.Printf("[%s] %s has %d clones:\n", parentDatGame.Name, parentDatGame.Description, len(visibleGamelistClones)-1)
+					for i, visibleGamelistClone := range visibleGamelistClones {
+						fmt.Printf(" %d: [%s] %s\n", i, visibleGamelistClone.RomName, datFile.RomNames[visibleGamelistClone.RomName].Description)
+					}
+
+					fmt.Printf("Keep game #: ")
+					fmt.Scanf("%d\n", &num)
+				}
+
+				for i, _ := range visibleGamelistClones {
+					if i != num {
+						visibleGamelistClones[i].Hidden = true
+						hidden++
+					}
+				}
+			}
+
+		}
+	}
+
+	return hidden, nil
 }
 
 func NewScanCmd() *cli.Command {
@@ -170,9 +197,9 @@ func NewScanCmd() *cli.Command {
 				Value: cli.NewStringSlice("hack", "bootleg", "homebrew", "prototype", "korean", "japan", "jamma pcb"),
 			},
 			&cli.BoolFlag{
-				Name:  "clones-only",
-				Usage: "hide original games when a working clone is present",
-				Value: true,
+				Name:  "clones-selection",
+				Usage: "user selects which clone (or original) to show, otherwise, try to automatically pick the best one",
+				Value: false,
 			},
 			&cli.BoolFlag{
 				Name:  "hide-horizontal",
@@ -227,9 +254,17 @@ func NewScanCmd() *cli.Command {
 			}
 			log.WithFields(log.Fields{"games": len(gamelistFile.Games), "path": gamelistFile.ShortPath}).Info("gamelist loaded")
 
-			if err := scanGames(c, datFile, gamelistFile); err != nil {
+			hiddenGames, err := scanGames(c, datFile, gamelistFile)
+			if err != nil {
 				return err
 			}
+
+			hiddenClones, err := scanClones(c, datFile, gamelistFile)
+			if err != nil {
+				return err
+			}
+
+			log.WithFields(log.Fields{"path": gamelistFile.ShortPath}).Infof("%d games out of %d were marked as hidden", hiddenGames+hiddenClones, len(gamelistFile.Games))
 
 			if err := gamelistFile.Save(); err != nil {
 				log.Errorf("unable to save: %s %v", gamelistFile.Path, err)
