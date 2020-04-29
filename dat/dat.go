@@ -11,7 +11,7 @@ type File struct {
 	Header Header `xml:"header"`
 	Games  []Game `xml:"game"`
 
-	Map       map[string]*Game `xml:"-"`
+	RomNames  map[string]*Game `xml:"-"`
 	Path      string           `xml:"-"`
 	ShortPath string           `xml:"-"`
 }
@@ -42,7 +42,9 @@ type Game struct {
 	Driver struct {
 		Status string `xml:"status,attr"`
 	} `xml:"driver"`
-	Map map[string]*Rom `xml:"-"`
+
+	Zips   map[string]*Rom  `xml:"-"`
+	Clones map[string]*Game `xml:"-"`
 }
 
 type Video struct {
@@ -68,10 +70,10 @@ type Rom struct {
 
 func New(path string) (*File, error) {
 	f, err := os.Open(path)
-	defer f.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	var datFile File
 	if err := xml.NewDecoder(f).Decode(&datFile); err != nil {
@@ -81,13 +83,21 @@ func New(path string) (*File, error) {
 	datFile.Path = path
 	datFile.ShortPath = filepath.Join(filepath.Base(filepath.Dir(path)), filepath.Base(path))
 
-	datFile.Map = make(map[string]*Game, len(datFile.Games))
+	datFile.RomNames = make(map[string]*Game, len(datFile.Games))
 	for i := range datFile.Games {
-		datFile.Map[datFile.Games[i].Name] = &datFile.Games[i]
-		datFile.Games[i].Map = make(map[string]*Rom, len(datFile.Games[i].Rom))
+		datFile.RomNames[datFile.Games[i].Name] = &datFile.Games[i]
+		datFile.Games[i].Zips = make(map[string]*Rom, len(datFile.Games[i].Rom))
+		datFile.Games[i].Clones = make(map[string]*Game)
+
 		for j := range datFile.Games[i].Rom {
 			ext := filepath.Ext(datFile.Games[i].Rom[j].Name)
-			datFile.Games[i].Map[strings.TrimSuffix(datFile.Games[i].Rom[j].Name, ext)] = &datFile.Games[i].Rom[j]
+			datFile.Games[i].Zips[strings.TrimSuffix(datFile.Games[i].Rom[j].Name, ext)] = &datFile.Games[i].Rom[j]
+		}
+	}
+
+	for i := range datFile.Games {
+		if datFile.Games[i].CloneOf != "" {
+			datFile.RomNames[datFile.Games[i].CloneOf].Clones[datFile.Games[i].Name] = &datFile.Games[i]
 		}
 	}
 

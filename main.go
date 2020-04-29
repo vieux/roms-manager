@@ -18,10 +18,19 @@ func main() {
 		{Name: "Victor Vieux", Email: "github@vrgl117.games"},
 	}
 
+	app.Flags = []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "debug",
+			Usage: "enable debug logs",
+			Value: false,
+		},
+	}
+
 	app.Commands = []*cli.Command{
 		cmd.NewViewCmd(),
 		cmd.NewScanCmd(),
 		cmd.NewHideDuplicatesCmd(),
+		cmd.NewResetVisibilityCmd(),
 	}
 
 	err := app.Run(os.Args)

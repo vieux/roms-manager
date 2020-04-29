@@ -2,16 +2,20 @@ package gamelist
 
 import (
 	"encoding/xml"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type File struct {
 	XMLName xml.Name `xml:"gameList"`
 	Games   []Game   `xml:"game"`
 
-	Map       map[string]*Game `xml:"-"`
+	RomNames  map[string]*Game `xml:"-"`
+	Names     map[string]*Game `xml:"-"`
 	Path      string           `xml:"-"`
 	ShortPath string           `xml:"-"`
 }
@@ -51,18 +55,40 @@ func New(path string) (*File, error) {
 	gamelistFile.Path = path
 	gamelistFile.ShortPath = filepath.Join(filepath.Base(filepath.Dir(path)), filepath.Base(path))
 
-	gamelistFile.Map = make(map[string]*Game, len(gamelistFile.Games))
+	gamelistFile.RomNames = make(map[string]*Game, len(gamelistFile.Games))
+	gamelistFile.Names = make(map[string]*Game, len(gamelistFile.Games))
+
 	for i := range gamelistFile.Games {
 		ext := filepath.Ext(gamelistFile.Games[i].Path)
 		gamelistFile.Games[i].RomName = strings.TrimSuffix(filepath.Base(gamelistFile.Games[i].Path), ext)
-		gamelistFile.Map[gamelistFile.Games[i].RomName] = &gamelistFile.Games[i]
+		gamelistFile.RomNames[gamelistFile.Games[i].RomName] = &gamelistFile.Games[i]
+		gamelistFile.Names[gamelistFile.Games[i].Name] = &gamelistFile.Games[i]
+
 	}
 
 	return &gamelistFile, nil
 }
 
+func copyFile(fromPath, toPath string) error {
+	from, err := os.Open(fromPath)
+	if err != nil {
+		return err
+	}
+	defer from.Close()
+
+	to, err := os.OpenFile(toPath, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	defer to.Close()
+
+	_, err = io.Copy(to, from)
+	return err
+}
+
 func (gamelistFile *File) Save() error {
-	f, err := os.Create(gamelistFile.Path + ".new")
+	copyFile(gamelistFile.Path, fmt.Sprintf("%s.old.%d", gamelistFile.Path, time.Now().Unix()))
+	f, err := os.Create(gamelistFile.Path)
 	if err != nil {
 		return err
 	}

@@ -34,6 +34,10 @@ func NewViewCmd() *cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) error {
+			if c.Bool("debug") {
+				log.SetLevel(log.DebugLevel)
+			}
+
 			gamelistFile, err := gamelist.New(c.Path("gamelist"))
 			if err != nil {
 				log.Fatalf("unable to open: %s %v", c.Path("gamelist"), err)

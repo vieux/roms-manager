@@ -61,15 +61,15 @@ func scanGame(c *cli.Context, datGame *dat.Game, game *gamelist.Game) bool {
 
 func scanZip(datGame *dat.Game, game *gamelist.Game, path string) bool {
 	r, err := zip.OpenReader(path)
-	defer r.Close()
-
 	if err != nil {
 		log.Errorf("unable to open: %s %v", path, err)
 		return false
 	}
+	defer r.Close()
+
 	for _, f := range r.File {
 		ext := filepath.Ext(f.Name)
-		if rom, ok := datGame.Map[strings.TrimSuffix(f.Name, ext)]; ok {
+		if rom, ok := datGame.Zips[strings.TrimSuffix(f.Name, ext)]; ok {
 			if rom.Size != int(f.FileHeader.UncompressedSize) {
 				log.WithFields(log.Fields{"rom": game.RomName}).Warnf("file %s has wrong size", f.Name)
 				return false
@@ -94,11 +94,12 @@ func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) e
 	total := 0
 	hidden := 0
 	for i, game := range gamelistFile.Games {
+		log.WithFields(log.Fields{"rom": game.RomName, "hidden": game.Hidden}).Debugf("scanning game")
 		if game.Hidden {
 			continue
 		}
 		total++
-		datGame, ok := datFile.Map[game.RomName]
+		datGame, ok := datFile.RomNames[game.RomName]
 		if !ok {
 			log.WithFields(log.Fields{"rom": game.RomName}).Warn("not present in .dat file")
 			gamelistFile.Games[i].Hidden = true
@@ -113,13 +114,32 @@ func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) e
 			}
 
 			if c.Bool("clones-only") && datGame.CloneOf != "" && datGame.CloneOf != datGame.Name {
-				if _, ok := gamelistFile.Map[datGame.CloneOf]; ok && !gamelistFile.Map[datGame.CloneOf].Hidden {
+				if _, ok := gamelistFile.RomNames[datGame.CloneOf]; ok && !gamelistFile.RomNames[datGame.CloneOf].Hidden {
 					log.WithFields(log.Fields{"rom": game.RomName}).Warnf("clone of %q", datGame.CloneOf)
-					gamelistFile.Map[datGame.CloneOf].Hidden = true
-					gamelistFile.Map[datGame.CloneOf].Favorite = false
+					gamelistFile.RomNames[datGame.CloneOf].Hidden = true
+					gamelistFile.RomNames[datGame.CloneOf].Favorite = false
 					hidden++
 					continue
 				}
+				/*
+					if _, ok := gamelistFile.RomNames[datGame.CloneOf]; ok {
+						for j, _ := range datFile.RomNames[datGame.CloneOf].Clones {
+							if _, ok2 := gamelistFile.RomNames[datFile.RomNames[datGame.CloneOf].Clones[j].Name]; ok2 {
+								if !gamelistFile.RomNames[datFile.RomNames[datGame.CloneOf].Clones[j].Name].Hidden {
+									log.WithFields(log.Fields{"rom": game.RomName}).Warnf("another clone of %q is already present", datGame.CloneOf)
+									gamelistFile.Games[i].Hidden = true
+									gamelistFile.Games[i].Favorite = false
+									hidden++
+									continue
+								}
+							}
+						}
+					}
+				*/
+			}
+
+			if c.Bool("force-visible") {
+				gamelistFile.Games[i].Hidden = false
 			}
 		}
 	}
@@ -182,8 +202,17 @@ func NewScanCmd() *cli.Command {
 				Usage: "scan the inside of the rom",
 				Value: true,
 			},
+			&cli.BoolFlag{
+				Name:  "force-visible",
+				Usage: "set the game to visible even if it was hidden if roms-manager determines it is compatible",
+				Value: false,
+			},
 		},
 		Action: func(c *cli.Context) error {
+			if c.Bool("debug") {
+				log.SetLevel(log.DebugLevel)
+			}
+
 			datFile, err := dat.New(c.Path("dat"))
 			if err != nil {
 				log.Fatalf("unable to open: %s %v", c.Path("dat"), err)

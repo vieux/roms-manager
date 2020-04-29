@@ -6,31 +6,22 @@ import (
 	"github.com/vrgl117-games/roms-manager/gamelist"
 )
 
-func hideDuplicates(gamelistFiles []*gamelist.File) {
-	for i, leftGamelistFile := range gamelistFiles {
-		for _, rightGamelistFile := range gamelistFiles[i+1:] {
-			total := 0
-			hidden := 0
-			for j, game := range rightGamelistFile.Games {
-				if !rightGamelistFile.Games[j].Hidden {
-					total++
-					if _, ok := leftGamelistFile.RomNames[game.RomName]; ok {
-						log.WithFields(log.Fields{"rom": game.RomName}).Warnf("already present in %s", leftGamelistFile.ShortPath)
-						rightGamelistFile.Games[j].Hidden = true
-						rightGamelistFile.Games[j].Favorite = false
-						hidden++
-					}
-				}
-			}
-			log.WithFields(log.Fields{"path": rightGamelistFile.ShortPath}).Infof("%d games out of %d were marked as hidden", hidden, total)
+func resetVisibility(gamelistFiles []*gamelist.File) {
+	for _, gamelistFile := range gamelistFiles {
+		for j, _ := range gamelistFile.Games {
+			log.WithFields(log.Fields{"rom": gamelistFile.Games[j].RomName}).Debugf("resetting visibility")
+
+			gamelistFile.Games[j].Hidden = false
 		}
+		log.WithFields(log.Fields{"path": gamelistFile.ShortPath}).Infof("all games were marked as visible")
+
 	}
 }
 
-func NewHideDuplicatesCmd() *cli.Command {
+func NewResetVisibilityCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "hide-duplicates",
-		Usage: "hide duplicates games from a list of gamelist.xml files",
+		Name:  "reset-visibility",
+		Usage: "set all games from a list of gamelist.xml files to visible",
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{
 				Name:     "gamelist",
@@ -55,9 +46,9 @@ func NewHideDuplicatesCmd() *cli.Command {
 				gamelistFiles = append(gamelistFiles, gamelistFile)
 			}
 
-			hideDuplicates(gamelistFiles)
+			resetVisibility(gamelistFiles)
 
-			for _, gamelistFile := range gamelistFiles[1:] {
+			for _, gamelistFile := range gamelistFiles {
 				if err := gamelistFile.Save(); err != nil {
 					log.Errorf("unable to save: %s %v", gamelistFile.Path, err)
 					return err
