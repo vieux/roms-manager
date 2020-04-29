@@ -8,7 +8,7 @@ import (
 
 func resetVisibility(gamelistFiles []*gamelist.File) {
 	for _, gamelistFile := range gamelistFiles {
-		for j, _ := range gamelistFile.Games {
+		for j := range gamelistFile.Games {
 			log.WithFields(log.Fields{"rom": gamelistFile.Games[j].RomName}).Debugf("resetting visibility")
 
 			gamelistFile.Games[j].Hidden = false

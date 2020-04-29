@@ -162,7 +162,7 @@ func scanClones(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) 
 					fmt.Scanf("%d\n", &num)
 				}
 
-				for i, _ := range visibleGamelistClones {
+				for i := range visibleGamelistClones {
 					if i != num {
 						visibleGamelistClones[i].Hidden = true
 						hidden++

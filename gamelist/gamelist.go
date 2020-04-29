@@ -42,10 +42,10 @@ type Game struct {
 
 func New(path string) (*File, error) {
 	f, err := os.Open(path)
-	defer f.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	var gamelistFile File
 	if err := xml.NewDecoder(f).Decode(&gamelistFile); err != nil {
@@ -87,7 +87,10 @@ func copyFile(fromPath, toPath string) error {
 }
 
 func (gamelistFile *File) Save() error {
-	copyFile(gamelistFile.Path, fmt.Sprintf("%s.old.%d", gamelistFile.Path, time.Now().Unix()))
+	if err := copyFile(gamelistFile.Path, fmt.Sprintf("%s.old.%d", gamelistFile.Path, time.Now().Unix())); err != nil {
+		return err
+	}
+
 	f, err := os.Create(gamelistFile.Path)
 	if err != nil {
 		return err

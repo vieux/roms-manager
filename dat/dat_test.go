@@ -22,7 +22,7 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, "2020bb", f.Games[1].CloneOf)
 	assert.Equal(t, 46, len(f.Games[1].Rom))
 
-	assert.Equal(t, 2, len(f.Map))
+	assert.Equal(t, 2, len(f.RomNames))
 
-	assert.Equal(t, "2020 Super Baseball (set 1)", f.Map[f.Map["2020bba"].CloneOf].Description)
+	assert.Equal(t, "2020 Super Baseball (set 1)", f.RomNames[f.RomNames["2020bba"].CloneOf].Description)
 }
