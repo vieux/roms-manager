@@ -18,18 +18,10 @@ func hideDuplicates(c *cli.Context, gamelistFiles []*gamelist.File) {
 				if !rightGamelistFile.Games[j].Hidden {
 					total++
 					if _, ok := leftGamelistFile.RomNames[game.RomName]; ok {
-						log.WithFields(log.Fields{"rom": game.RomName}).Warnf("already present in %s", leftGamelistFile.ShortPath)
-						rightGamelistFile.Games[j].Hidden = true
-						if c.Bool("override-favorites") {
-							rightGamelistFile.Games[j].Favorite = false
-						}
+						hideGame(c, rightGamelistFile, j, fmt.Sprintf("already present in %s", leftGamelistFile.ShortPath))
 						hidden++
 					} else if _, ok := leftGamelistFile.Names[game.Name]; ok {
-						log.WithFields(log.Fields{"rom": game.RomName}).Warnf("already present in %s", leftGamelistFile.ShortPath)
-						rightGamelistFile.Games[j].Hidden = true
-						if c.Bool("override-favorites") {
-							rightGamelistFile.Games[j].Favorite = false
-						}
+						hideGame(c, rightGamelistFile, j, fmt.Sprintf("already present in %s", leftGamelistFile.ShortPath))
 						hidden++
 					}
 				}

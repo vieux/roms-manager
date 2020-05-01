@@ -26,8 +26,10 @@ func scanGame(c *cli.Context, datGame *dat.Game, game *gamelist.Game) string {
 		return "vertical game"
 	}
 
-	if aspectRatio := datGame.Video.AspectRatio(); aspectRatio != "x" && c.String("aspect-ratio") != aspectRatio {
-		return fmt.Sprintf("incompatible aspect ratio %q", aspectRatio)
+	if aspectRatio := datGame.Video.AspectRatio(); aspectRatio != "x" {
+		if _, ok := c.Generic("aspect-ratio").(*MapFlag).values[aspectRatio]; !ok {
+			return fmt.Sprintf("incompatible aspect ratio %q", aspectRatio)
+		}
 	}
 
 	if datGame.Input.Buttons != 0 && datGame.Input.Buttons > c.Int("max-buttons") {
@@ -220,10 +222,10 @@ func NewScanCmd() *cli.Command {
 				Usage: "hide games with incompatible controls",
 				Value: NewMapFlag("joy8way", "joy4way", "stick"),
 			},
-			&cli.StringFlag{
+			&cli.GenericFlag{
 				Name:  "aspect-ratio",
 				Usage: "hide games with incompatible aspect ratio",
-				Value: "4x3",
+				Value: NewMapFlag("4x3", "3x4", "4x6"),
 			},
 			&cli.BoolFlag{
 				Name:  "zip",

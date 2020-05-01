@@ -39,6 +39,7 @@ type Game struct {
 	Reason      string  `xml:"reason,omitempty"`
 
 	RomName string `xml:"-"`
+	System  string `xmk:"-"`
 }
 
 func New(path string) (*File, error) {
@@ -62,9 +63,9 @@ func New(path string) (*File, error) {
 	for i := range gamelistFile.Games {
 		ext := filepath.Ext(gamelistFile.Games[i].Path)
 		gamelistFile.Games[i].RomName = strings.TrimSuffix(filepath.Base(gamelistFile.Games[i].Path), ext)
+		gamelistFile.Games[i].System = filepath.Base(filepath.Dir(path))
 		gamelistFile.RomNames[gamelistFile.Games[i].RomName] = &gamelistFile.Games[i]
 		gamelistFile.Names[gamelistFile.Games[i].Name] = &gamelistFile.Games[i]
-
 	}
 
 	return &gamelistFile, nil
