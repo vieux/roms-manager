@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	"github.com/vrgl117-games/roms-manager/gamelist"
 )
 
-func hideDuplicates(gamelistFiles []*gamelist.File) {
+func hideDuplicates(c *cli.Context, gamelistFiles []*gamelist.File) {
 	for i, leftGamelistFile := range gamelistFiles {
 		for _, rightGamelistFile := range gamelistFiles[i+1:] {
 			total := 0
@@ -17,7 +20,16 @@ func hideDuplicates(gamelistFiles []*gamelist.File) {
 					if _, ok := leftGamelistFile.RomNames[game.RomName]; ok {
 						log.WithFields(log.Fields{"rom": game.RomName}).Warnf("already present in %s", leftGamelistFile.ShortPath)
 						rightGamelistFile.Games[j].Hidden = true
-						rightGamelistFile.Games[j].Favorite = false
+						if c.Bool("override-favorites") {
+							rightGamelistFile.Games[j].Favorite = false
+						}
+						hidden++
+					} else if _, ok := leftGamelistFile.Names[game.Name]; ok {
+						log.WithFields(log.Fields{"rom": game.RomName}).Warnf("already present in %s", leftGamelistFile.ShortPath)
+						rightGamelistFile.Games[j].Hidden = true
+						if c.Bool("override-favorites") {
+							rightGamelistFile.Games[j].Favorite = false
+						}
 						hidden++
 					}
 				}
@@ -34,8 +46,12 @@ func NewHideDuplicatesCmd() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{
 				Name:     "gamelist",
-				Usage:    "path to the <gamelist.xml> file(s)",
+				Usage:    "path to the <gamelist.xml> files",
 				Required: true,
+			},
+			&cli.BoolFlag{
+				Name:  "override-favorites",
+				Usage: "unfavorite hidden games",
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -47,20 +63,22 @@ func NewHideDuplicatesCmd() *cli.Command {
 			for _, gamelistPath := range c.StringSlice("gamelist") {
 				gamelistFile, err := gamelist.New(gamelistPath)
 				if err != nil {
-					log.Fatalf("unable to open: %s %v", gamelistPath, err)
-					return err
+					return fmt.Errorf("unable to open: %s %v", gamelistPath, err)
 				}
 
 				log.WithFields(log.Fields{"games": len(gamelistFile.Games), "path": gamelistFile.ShortPath}).Info("gamelist loaded")
 				gamelistFiles = append(gamelistFiles, gamelistFile)
 			}
 
-			hideDuplicates(gamelistFiles)
+			if len(gamelistFiles) < 2 {
+				return errors.New("at least 2 gameslist.xml files are required to hide duplicates")
+			}
+
+			hideDuplicates(c, gamelistFiles)
 
 			for _, gamelistFile := range gamelistFiles[1:] {
 				if err := gamelistFile.Save(); err != nil {
-					log.Errorf("unable to save: %s %v", gamelistFile.Path, err)
-					return err
+					return fmt.Errorf("unable to save: %s %v", gamelistFile.Path, err)
 				}
 			}
 

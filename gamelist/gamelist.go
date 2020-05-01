@@ -36,6 +36,7 @@ type Game struct {
 	LastPlayed  string  `xml:"lastplayed,omitempty"`
 	Favorite    bool    `xml:"favorite,omitempty"`
 	Hidden      bool    `xml:"hidden,omitempty"`
+	Reason      string  `xml:"reason,omitempty"`
 
 	RomName string `xml:"-"`
 }

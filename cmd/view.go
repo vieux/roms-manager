@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"sort"
 
 	log "github.com/sirupsen/logrus"
@@ -24,7 +25,7 @@ func view(c *cli.Context, gamelistFiles []*gamelist.File) {
 	})
 
 	for _, game := range games {
-		log.WithFields(log.Fields{"rom": game.RomName, "hidden": game.Hidden}).Info(game.Name)
+		log.WithFields(log.Fields{"rom": game.RomName, "hidden": game.Hidden, "reason": game.Reason}).Info(game.Name)
 	}
 }
 
@@ -56,8 +57,7 @@ func NewViewCmd() *cli.Command {
 			for _, gamelistPath := range c.StringSlice("gamelist") {
 				gamelistFile, err := gamelist.New(gamelistPath)
 				if err != nil {
-					log.Fatalf("unable to open: %s %v", gamelistPath, err)
-					return err
+					return fmt.Errorf("unable to open: %s %v", gamelistPath, err)
 				}
 
 				log.WithFields(log.Fields{"games": len(gamelistFile.Games), "path": gamelistFile.ShortPath}).Info("gamelist loaded")

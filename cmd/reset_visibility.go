@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	"github.com/vrgl117-games/roms-manager/gamelist"
@@ -9,12 +11,11 @@ import (
 func resetVisibility(gamelistFiles []*gamelist.File) {
 	for _, gamelistFile := range gamelistFiles {
 		for j := range gamelistFile.Games {
-			log.WithFields(log.Fields{"rom": gamelistFile.Games[j].RomName}).Debugf("resetting visibility")
-
+			log.WithFields(log.Fields{"rom": gamelistFile.Games[j].RomName}).Debug("resetting visibility")
 			gamelistFile.Games[j].Hidden = false
+			gamelistFile.Games[j].Reason = ""
 		}
-		log.WithFields(log.Fields{"path": gamelistFile.ShortPath}).Infof("all games were marked as visible")
-
+		log.WithFields(log.Fields{"path": gamelistFile.ShortPath}).Info("all games were marked as visible")
 	}
 }
 
@@ -38,8 +39,7 @@ func NewResetVisibilityCmd() *cli.Command {
 			for _, gamelistPath := range c.StringSlice("gamelist") {
 				gamelistFile, err := gamelist.New(gamelistPath)
 				if err != nil {
-					log.Fatalf("unable to open: %s %v", gamelistPath, err)
-					return err
+					return fmt.Errorf("unable to open: %s %v", gamelistPath, err)
 				}
 
 				log.WithFields(log.Fields{"games": len(gamelistFile.Games), "path": gamelistFile.ShortPath}).Info("gamelist loaded")
@@ -50,8 +50,7 @@ func NewResetVisibilityCmd() *cli.Command {
 
 			for _, gamelistFile := range gamelistFiles {
 				if err := gamelistFile.Save(); err != nil {
-					log.Errorf("unable to save: %s %v", gamelistFile.Path, err)
-					return err
+					return fmt.Errorf("unable to save: %s %v", gamelistFile.Path, err)
 				}
 			}
 

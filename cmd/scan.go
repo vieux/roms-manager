@@ -14,85 +14,82 @@ import (
 	"github.com/vrgl117-games/roms-manager/gamelist"
 )
 
-func scanGame(c *cli.Context, datGame *dat.Game, game *gamelist.Game) bool {
+func scanGame(c *cli.Context, datGame *dat.Game, game *gamelist.Game) string {
 	if strings.Contains(game.Name, "notgame") {
-		log.WithFields(log.Fields{"rom": game.RomName}).Warn("not a game")
-		return false
+		return "not a game"
 	}
 	if datGame.Video.Orientation != "" && c.Bool("hide-horizontal") && datGame.Video.Orientation == "horizontal" {
-		log.WithFields(log.Fields{"rom": game.RomName}).Warn("horizontal game")
-		return false
+		return "horizontal game"
 	}
 
 	if datGame.Video.Orientation != "" && c.Bool("hide-vertical") && datGame.Video.Orientation == "vertical" {
-		log.WithFields(log.Fields{"rom": game.RomName}).Warn("vertical game")
-		return false
+		return "vertical game"
 	}
 
 	if aspectRatio := datGame.Video.AspectRatio(); aspectRatio != "x" && c.String("aspect-ratio") != aspectRatio {
-		log.WithFields(log.Fields{"rom": game.RomName}).Warnf("incompatible aspect ratio %q", aspectRatio)
-		return false
+		return fmt.Sprintf("incompatible aspect ratio %q", aspectRatio)
 	}
 
 	if datGame.Input.Buttons != 0 && datGame.Input.Buttons > c.Int("max-buttons") {
-		log.WithFields(log.Fields{"rom": game.RomName}).Warn("game require too many buttons")
-		return false
+		return "game require too many buttons"
 	}
 
 	if datGame.Input.Control != "" {
 		if _, ok := c.Generic("controls").(*MapFlag).values[datGame.Input.Control]; !ok {
-			log.WithFields(log.Fields{"rom": game.RomName}).Warnf("unknown %q control", datGame.Input.Control)
-			return false
+			return fmt.Sprintf("unknown %q control", datGame.Input.Control)
 		}
 	}
 	for _, hide := range c.StringSlice("forbidden-keywords") {
 		if strings.Contains(strings.ToLower(datGame.Description), hide) {
-			log.WithFields(log.Fields{"rom": game.RomName}).Warnf("%q found in description", hide)
-			return false
+			return fmt.Sprintf("%q found in description", hide)
 		}
 
 		if datGame.Manufacturer == hide {
-			log.WithFields(log.Fields{"rom": game.RomName}).Warnf("manufacturer is %q", hide)
-			return false
+			return fmt.Sprintf("manufacturer is %q", hide)
 		}
 	}
 
-	return true
+	return ""
 }
 
-func scanZip(datGame *dat.Game, game *gamelist.Game, path string) bool {
+func scanZip(datGame *dat.Game, game *gamelist.Game, path string) string {
 	r, err := zip.OpenReader(path)
 	if err != nil {
-		log.Errorf("unable to open: %s %v", path, err)
-		return false
+		return fmt.Sprintf("unable to open: %s %v", path, err)
 	}
 	defer r.Close()
 
-	for _, f := range r.File {
-		ext := filepath.Ext(f.Name)
-		if rom, ok := datGame.Zips[strings.TrimSuffix(f.Name, ext)]; ok {
-			if rom.Size != int(f.FileHeader.UncompressedSize) {
-				log.WithFields(log.Fields{"rom": game.RomName}).Warnf("file %s has wrong size", f.Name)
-				return false
+	for _, romFile := range r.File {
+		if rom, ok := datGame.RomNames[romFile.Name]; ok {
+			if rom.Size != int(romFile.FileHeader.UncompressedSize) {
+				return fmt.Sprintf("file %s has wrong size", romFile.Name)
 			}
 
 			crc, err := strconv.ParseUint(rom.CRC, 16, 32)
 			if err != nil {
-				log.Errorf("unable to convert CRC: %s %v", rom.CRC, err)
-				return false
+				return fmt.Sprintf("unable to convert CRC: %s %v", rom.CRC, err)
 			}
-			if uint32(crc) != f.FileHeader.CRC32 {
-				log.WithFields(log.Fields{"rom": game.RomName}).Warnf("file %s has wrong CRC", f.Name)
-				return false
+			if uint32(crc) != romFile.FileHeader.CRC32 {
+				return fmt.Sprintf("file %s has wrong CRC", romFile.Name)
 			}
 		}
 	}
 
-	return true
+	return ""
+}
+
+func hideGame(c *cli.Context, gamelistFile *gamelist.File, i int, reason string) {
+	log.WithFields(log.Fields{"rom": gamelistFile.Games[i].RomName}).Warn(reason)
+	gamelistFile.Games[i].Hidden = true
+	gamelistFile.Games[i].Reason = reason
+	if c.Bool("override-favorites") {
+		gamelistFile.Games[i].Favorite = false
+	}
 }
 
 func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) (int, error) {
 	hidden := 0
+
 	for i, game := range gamelistFile.Games {
 		log.WithFields(log.Fields{"rom": game.RomName, "hidden": game.Hidden}).Debugf("scanning game")
 
@@ -102,18 +99,16 @@ func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) (
 		if game.Hidden {
 			continue
 		}
-		datGame, ok := datFile.RomNames[game.RomName]
-		if !ok {
-			log.WithFields(log.Fields{"rom": game.RomName}).Warn("not present in .dat file")
-			gamelistFile.Games[i].Hidden = true
-			gamelistFile.Games[i].Favorite = false
+		if datGame, ok := datFile.RomNames[game.RomName]; !ok {
+			hideGame(c, gamelistFile, i, "not present in .dat file")
 			hidden++
-		} else {
-			if !scanGame(c, datGame, &game) || (c.Bool("zip") && !scanZip(datGame, &game, filepath.Join(filepath.Dir(gamelistFile.Path), game.Path))) {
-				gamelistFile.Games[i].Hidden = true
-				gamelistFile.Games[i].Favorite = false
+		} else if reason := scanGame(c, datGame, &game); reason != "" {
+			hideGame(c, gamelistFile, i, reason)
+			hidden++
+		} else if c.Bool("zip") {
+			if reason := scanZip(datGame, &game, filepath.Join(filepath.Dir(gamelistFile.Path), game.Path)); reason != "" {
+				hideGame(c, gamelistFile, i, reason)
 				hidden++
-				continue
 			}
 		}
 	}
@@ -165,6 +160,9 @@ func scanClones(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) 
 				for i := range visibleGamelistClones {
 					if i != num {
 						visibleGamelistClones[i].Hidden = true
+						if c.Bool("override-favorites") {
+							visibleGamelistClones[i].Favorite = false
+						}
 						hidden++
 					}
 				}
@@ -194,12 +192,11 @@ func NewScanCmd() *cli.Command {
 			&cli.StringSliceFlag{
 				Name:  "forbidden-keywords",
 				Usage: "hide games if the following keywords are found in the description",
-				Value: cli.NewStringSlice("hack", "bootleg", "homebrew", "prototype", "korean", "japan", "jamma pcb"),
+				Value: cli.NewStringSlice("hack", "bootleg", "homebrew", "prototype", "jamma pcb"),
 			},
 			&cli.BoolFlag{
 				Name:  "clones-selection",
 				Usage: "user selects which clone (or original) to show, otherwise, try to automatically pick the best one",
-				Value: false,
 			},
 			&cli.BoolFlag{
 				Name:  "hide-horizontal",
@@ -209,6 +206,10 @@ func NewScanCmd() *cli.Command {
 				Name:  "hide-vertical",
 				Usage: "hide vertical games",
 			},
+			&cli.BoolFlag{
+				Name:  "override-favorites",
+				Usage: "unfavorite hidden games",
+			},
 			&cli.IntFlag{
 				Name:  "max-buttons",
 				Usage: "hide games that require too many buttons",
@@ -217,7 +218,7 @@ func NewScanCmd() *cli.Command {
 			&cli.GenericFlag{
 				Name:  "controls",
 				Usage: "hide games with incompatible controls",
-				Value: NewMapFlag("joy8way", "joy4way"),
+				Value: NewMapFlag("joy8way", "joy4way", "stick"),
 			},
 			&cli.StringFlag{
 				Name:  "aspect-ratio",
@@ -232,7 +233,6 @@ func NewScanCmd() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "force-visible",
 				Usage: "set the game to visible even if it was hidden if roms-manager determines it is compatible",
-				Value: false,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -242,14 +242,14 @@ func NewScanCmd() *cli.Command {
 
 			datFile, err := dat.New(c.Path("dat"))
 			if err != nil {
-				log.Fatalf("unable to open: %s %v", c.Path("dat"), err)
+				return fmt.Errorf("unable to open: %s %v", c.Path("dat"), err)
 
 			}
 			log.WithFields(log.Fields{"games": len(datFile.Games), "path": datFile.ShortPath}).Info("database loaded")
 
 			gamelistFile, err := gamelist.New(c.Path("gamelist"))
 			if err != nil {
-				log.Fatalf("unable to open: %s %v", c.Path("gamelist"), err)
+				return fmt.Errorf("unable to open: %s %v", c.Path("gamelist"), err)
 
 			}
 			log.WithFields(log.Fields{"games": len(gamelistFile.Games), "path": gamelistFile.ShortPath}).Info("gamelist loaded")
@@ -267,8 +267,7 @@ func NewScanCmd() *cli.Command {
 			log.WithFields(log.Fields{"path": gamelistFile.ShortPath}).Infof("%d games out of %d were marked as hidden", hiddenGames+hiddenClones, len(gamelistFile.Games))
 
 			if err := gamelistFile.Save(); err != nil {
-				log.Errorf("unable to save: %s %v", gamelistFile.Path, err)
-				return err
+				return fmt.Errorf("unable to save: %s %v", gamelistFile.Path, err)
 			}
 			return nil
 		},

@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type File struct {
@@ -38,13 +37,13 @@ type Game struct {
 		Buttons int    `xml:"buttons,attr"`
 		Control string `xml:"control,attr"`
 	} `xml:"input"`
-	Rom    []Rom `xml:"rom"`
+	Roms   []Rom `xml:"rom"`
 	Driver struct {
 		Status string `xml:"status,attr"`
 	} `xml:"driver"`
 
-	Zips   map[string]*Rom  `xml:"-"`
-	Clones map[string]*Game `xml:"-"`
+	RomNames map[string]*Rom  `xml:"-"`
+	Clones   map[string]*Game `xml:"-"`
 }
 
 type Video struct {
@@ -86,12 +85,11 @@ func New(path string) (*File, error) {
 	datFile.RomNames = make(map[string]*Game, len(datFile.Games))
 	for i := range datFile.Games {
 		datFile.RomNames[datFile.Games[i].Name] = &datFile.Games[i]
-		datFile.Games[i].Zips = make(map[string]*Rom, len(datFile.Games[i].Rom))
+		datFile.Games[i].RomNames = make(map[string]*Rom, len(datFile.Games[i].Roms))
 		datFile.Games[i].Clones = make(map[string]*Game)
 
-		for j := range datFile.Games[i].Rom {
-			ext := filepath.Ext(datFile.Games[i].Rom[j].Name)
-			datFile.Games[i].Zips[strings.TrimSuffix(datFile.Games[i].Rom[j].Name, ext)] = &datFile.Games[i].Rom[j]
+		for j := range datFile.Games[i].Roms {
+			datFile.Games[i].RomNames[datFile.Games[i].Roms[j].Name] = &datFile.Games[i].Roms[j]
 		}
 	}
 

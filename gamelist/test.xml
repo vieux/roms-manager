@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gameList>
+  <game>
+    <name>Game (set 1)</name>
+    <desc>Test game</desc>
+    <path>./romname.zip</path>
+    <publisher>vrgl117.games</publisher>
+    <developer>vrgl117.games</developer>
+    <image>./media/images/romname.png</image>
+    <genre>Puzzle-Game</genre>
+    <hidden>true</hidden>
+  </game>
+  <game>
+    <name>Game (set 2)</name>
+    <desc>Test game</desc>
+    <path>./romname2.zip</path>
+    <publisher>vrgl117.games</publisher>
+    <developer>vrgl117.games</developer>
+    <image>./media/images/romname2.png</image>
+    <genre>Puzzle-Game</genre>
+    <hidden>false</hidden>
+  </game>
+</gameList>
