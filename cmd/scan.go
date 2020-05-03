@@ -10,11 +10,22 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
+	"github.com/vrgl117-games/roms-manager/catver"
 	"github.com/vrgl117-games/roms-manager/dat"
 	"github.com/vrgl117-games/roms-manager/gamelist"
 )
 
-func scanGame(c *cli.Context, datGame *dat.Game, game *gamelist.Game) string {
+func scanGame(c *cli.Context, datGame *dat.Game, catverFile *catver.File, game *gamelist.Game) string {
+	if catverFile != nil {
+		if category, ok := catverFile.Categories[game.RomName]; ok {
+			for _, hide := range c.StringSlice("hide-category") {
+				if strings.Contains(category, hide) {
+					return fmt.Sprintf("%q found in category", hide)
+				}
+			}
+		}
+	}
+
 	if strings.Contains(game.Name, "notgame") {
 		return "not a game"
 	}
@@ -89,7 +100,7 @@ func hideGame(c *cli.Context, gamelistFile *gamelist.File, i int, reason string)
 	}
 }
 
-func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) (int, error) {
+func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File, catverFile *catver.File) (int, error) {
 	hidden := 0
 
 	for i, game := range gamelistFile.Games {
@@ -104,7 +115,7 @@ func scanGames(c *cli.Context, datFile *dat.File, gamelistFile *gamelist.File) (
 		if datGame, ok := datFile.RomNames[game.RomName]; !ok {
 			hideGame(c, gamelistFile, i, "not present in .dat file")
 			hidden++
-		} else if reason := scanGame(c, datGame, &game); reason != "" {
+		} else if reason := scanGame(c, datGame, catverFile, &game); reason != "" {
 			hideGame(c, gamelistFile, i, reason)
 			hidden++
 		} else if c.Bool("zip") {
@@ -191,6 +202,10 @@ func NewScanCmd() *cli.Command {
 				Usage:    "path to the <gamelist.xml> file",
 				Required: true,
 			},
+			&cli.PathFlag{
+				Name:  "catver",
+				Usage: "path to the <catver.ini> file",
+			},
 			&cli.StringSliceFlag{
 				Name:  "forbidden-keywords",
 				Usage: "hide games if the following keywords are found in the description",
@@ -207,6 +222,11 @@ func NewScanCmd() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "hide-vertical",
 				Usage: "hide vertical games",
+			},
+			&cli.StringSliceFlag{
+				Name:  "hide-category",
+				Usage: "hide specific categories (require --catver)",
+				Value: cli.NewStringSlice("* Mature *"),
 			},
 			&cli.BoolFlag{
 				Name:  "override-favorites",
@@ -256,7 +276,17 @@ func NewScanCmd() *cli.Command {
 			}
 			log.WithFields(log.Fields{"games": len(gamelistFile.Games), "path": gamelistFile.ShortPath}).Info("gamelist loaded")
 
-			hiddenGames, err := scanGames(c, datFile, gamelistFile)
+			var catverFile *catver.File
+			if c.Path("catver") != "" {
+				catverFile, err = catver.New(c.Path("catver"))
+				if err != nil {
+					return fmt.Errorf("unable to open: %s %v", c.Path("catver"), err)
+
+				}
+				log.WithFields(log.Fields{"games": len(catverFile.Categories), "path": catverFile.ShortPath}).Info("catver loaded")
+			}
+
+			hiddenGames, err := scanGames(c, datFile, gamelistFile, catverFile)
 			if err != nil {
 				return err
 			}

@@ -1,5 +1,6 @@
 *~
 dats/
 roms/
+catvers/
 *.sh
 roms-manager

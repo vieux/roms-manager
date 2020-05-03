@@ -13,7 +13,7 @@ func main() {
 
 	app := cli.NewApp()
 	app.Usage = "a simple tool to scan arcade romset .dat and gamelist.xml files."
-	app.Version = "0.0.1"
+	app.Version = "1.1.0"
 	app.Authors = []*cli.Author{
 		{Name: "Victor Vieux", Email: "github@vrgl117.games"},
 	}

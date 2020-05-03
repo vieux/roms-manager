@@ -24,13 +24,15 @@ roms-manager has two mains functions
 
 ### Scan
 
-`scan` takes a database file (either `.dat` or a Mame `.xml`) and an EmulationStation `gameslist.xml` file.
+`scan` takes a database file (either `.dat` or a Mame `.xml`) and an
+EmulationStation `gameslist.xml` file and an optional `catver.ini` file.
 
 Features: 
 * hide incompatible games (wrong rom size, wrong CRC)
 * Only keep on games amongst an original and it's a clone(s)
 * hide games using a list of keywords (bootlegs, hacks, etc...)
 * if present in the database file, hide games with the incorrect aspect ratio or button layout
+* support catver.ini file to hide games based on category (mature by default)
 
 See `roms-manager scan --help` for the list of flags.
 
@@ -43,5 +45,4 @@ Feature:
 
 ## TODO
 
-* add support for `catver.ini`
 * download `.dat` files on the fly
